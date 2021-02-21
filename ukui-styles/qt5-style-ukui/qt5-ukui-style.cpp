@@ -63,6 +63,7 @@
 #include <QTableWidget>
 #include <QTreeView>
 #include <QTreeWidget>
+#include <QListWidget>
 #include <QHeaderView>
 #include <QEvent>
 #include <QDebug>
@@ -296,6 +297,7 @@ const QStringList Qt5UKUIStyle::specialList() const
     l<<"indicator-china-weather";
     l<<"kylin-video";
 //    l<<"ukui-bluetooth";
+    l<<"mktip";
     return l;
 }
 
@@ -338,6 +340,21 @@ bool Qt5UKUIStyle::eventFilter(QObject *obj, QEvent *e)
     if (e->type() == QEvent::StyleAnimationUpdate) {
         return true;
     }
+
+    if (qobject_cast<QPushButton *>(obj) || qobject_cast<QToolButton *>(obj)) {
+        if (e->type() == QEvent::Hide) {
+            if (QWidget *w = qobject_cast<QWidget *>(obj)) {
+                auto animator = m_button_animation_helper->animator(w);
+                if (animator) {
+                    animator->stopAnimator("SunKen");
+                    animator->stopAnimator("MouseOver");
+                    animator->setAnimatorCurrentTime("SunKen", 0);
+                    animator->setAnimatorCurrentTime("MouseOver", 0);
+                }
+            }
+        }
+        return false;
+    }
     return false;
 }
 
@@ -369,6 +386,8 @@ int Qt5UKUIStyle::styleHint(QStyle::StyleHint hint, const QStyleOption *option, 
         return false;
     case SH_Table_GridLineColor:
         return option ? option->palette.mid().color().darker().rgb() : 0;
+    case SH_ComboBox_AllowWheelScrolling:
+        return int(false);
     default:
         break;
     }
@@ -607,20 +626,11 @@ QIcon Qt5UKUIStyle::standardIcon(StandardPixmap standardIcon, const QStyleOption
 {
     if (QApplication::desktopSettingsAware() && !QIcon::themeName().isEmpty()) {
         switch (standardIcon) {
-        case SP_DialogOkButton:
-        case SP_DialogSaveButton:
-        case SP_DialogOpenButton:
-        case SP_DialogCancelButton:
-        case SP_DialogCloseButton:
-        case SP_DialogApplyButton:
-        case SP_DialogResetButton:
-        case SP_DialogHelpButton:
-        case SP_DialogDiscardButton:
-        case SP_DialogYesButton:
-        case SP_DialogNoButton:
-        {
-            return QIcon();
-        }
+        case SP_FileDialogListView:
+            return QIcon::fromTheme(QLatin1String("view-list-symbolic"));
+        case SP_FileDialogDetailedView:
+            return QIcon::fromTheme(QLatin1String("view-grid-symbolic"));
+
         default:
             break;
         }
@@ -709,6 +719,18 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
         if (isSelected) {
             color.setAlpha(255);
         }
+
+        if ((qobject_cast<const QListView *>(widget) || qobject_cast<const QListWidget *>(widget))
+                && (opt->decorationPosition != QStyleOptionViewItem::Top)) {
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing);
+            painter->setPen(Qt::transparent);
+            painter->setBrush(color);
+            painter->drawRoundedRect(option->rect, 4, 4);
+            painter->restore();
+            return;
+        }
+
         if (!isIconView)
             painter->fillRect(option->rect, color);
         else {
@@ -815,7 +837,7 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
                 painter->save();
                 painter->setPen(gridColor);
                 painter->setBrush(Qt::NoBrush);
-                painter->drawLine(vopt->rect.topRight(),vopt->rect.bottomRight());
+//                painter->drawLine(vopt->rect.topRight(),vopt->rect.bottomRight());
                 painter->restore();
             }
            return;
@@ -826,13 +848,9 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
 
     case PE_PanelButtonCommand://UKUI PushButton style
     {
-        if(const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton *>(option))
-        {
+        if (const QStyleOptionButton *button = qstyleoption_cast<const QStyleOptionButton *>(option)) {
             auto animator = m_button_animation_helper->animator(widget);
-            if(animator == nullptr)
-            {
-                return Style::drawPrimitive(PE_PanelButtonCommand,option,painter,widget);
-            }
+
             bool isWindowButton = false;
             bool isWindowColoseButton = false;
             if (widget && widget->property("isWindowButton").isValid())
@@ -841,31 +859,67 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
                 else if (widget->property("isWindowButton").toInt() == 0x02)
                     isWindowColoseButton = true;
 
-            if(!(button->state & State_Enabled))
-            {
-                animator->stopAnimator("SunKen");
-                animator->stopAnimator("MouseOver");
+            if (!(button->state & State_Enabled)) {
+                if (animator) {
+                    animator->stopAnimator("SunKen");
+                    animator->stopAnimator("MouseOver");
+                }
                 if (button->features & QStyleOptionButton::Flat)
                     return;
                 painter->save();
                 painter->setPen(Qt::NoPen);
-                painter->setBrush(option->palette.color(QPalette::Disabled,QPalette::Button));
-                painter->setRenderHint(QPainter::Antialiasing,true);
-                painter->drawRoundedRect(option->rect,4,4);
+                painter->setBrush(option->palette.color(QPalette::Disabled, QPalette::Button));
+                painter->setRenderHint(QPainter::Antialiasing, true);
+                painter->drawRoundedRect(option->rect, 4, 4);
                 painter->restore();
                 return;
             }
 
-             if(!(button->state & State_AutoRaise) && !(button->features & QStyleOptionButton::Flat))
-             {
-                 painter->save();
-                 painter->setPen(Qt::NoPen);
-                 painter->setBrush(option->palette.color(QPalette::Button));
-                 painter->setRenderHint(QPainter::Antialiasing,true);
-                 painter->drawRoundedRect(option->rect,4,4);
-                 painter->restore();
-             }
-            if((button->state & (State_Sunken | State_On)) || animator->isRunning("SunKen")
+            if (!(button->state & State_AutoRaise) && !(button->features & QStyleOptionButton::Flat)) {
+                painter->save();
+                painter->setPen(Qt::NoPen);
+                painter->setBrush(option->palette.color(QPalette::Button));
+                painter->setRenderHint(QPainter::Antialiasing, true);
+                painter->drawRoundedRect(option->rect,4,4);
+                painter->restore();
+            }
+
+            if (animator == nullptr) {
+                painter->save();
+                painter->setRenderHint(QPainter::Antialiasing,true);
+                painter->setPen(Qt::NoPen);
+                if (button->state & (State_Sunken | State_On)) {
+                    if (isWindowButton) {
+                        QColor color = button->palette.color(QPalette::Text);
+                        if (useDefaultPalette().contains(qAppName()))
+                            color = button->palette.color(QPalette::Base);
+                        color.setAlphaF(0.15);
+                        painter->setBrush(color);
+                    } else if (isWindowColoseButton) {
+                        painter->setBrush(QColor("#E44C50"));
+                    } else {
+                        painter->setBrush(button->palette.color(QPalette::Highlight));
+                    }
+                } else if (button->state & State_MouseOver) {
+                    if (isWindowButton) {
+                        QColor color = button->palette.color(QPalette::Text);
+                        if (useDefaultPalette().contains(qAppName()))
+                            color = button->palette.color(QPalette::Base);
+                        color.setAlphaF(0.1);
+                        painter->setBrush(color);
+                    } else if (isWindowColoseButton) {
+                        painter->setBrush(QColor("#F86458"));
+                    } else {
+                        auto color = button->palette.color(QPalette::Highlight).lighter(125);
+                        painter->setBrush(color);
+                    }
+                }
+                painter->drawRoundedRect(button->rect, 4, 4);
+                painter->restore();
+                return;
+            }
+
+            if ((button->state & (State_Sunken | State_On)) || animator->isRunning("SunKen")
                     || animator->value("SunKen") == 1.0)
             {
                 double opacity = animator->value("SunKen").toDouble();
@@ -923,6 +977,7 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
                 painter->restore();
                 return;
             }
+
             if(button->state & State_MouseOver || animator->isRunning("MouseOver")
                     || animator->currentAnimatorTime("MouseOver") == animator->totalAnimationDuration("MouseOver"))
             {
@@ -968,40 +1023,6 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
         }
         break;
     }
-        //        painter->save();
-        //        painter->setRenderHint(QPainter::Antialiasing,true);
-        //        /*!
-        //       * \todo
-        //       * It is selected by default and not done first,because it conflicts with the normal button.
-        //       */
-        //        //        if(option->state & State_HasFocus){
-        //        //            painter->setPen(option->palette.color(QPalette::Disabled,QPalette::Button));
-        //        //            painter->setBrush(option->palette.color(QPalette::Highlight));
-        //        //        }
-        //        //        else {
-        //        painter->setPen(Qt::NoPen);
-        //        painter->setBrush(option->palette.color(QPalette::Button));
-        //        //        }
-
-        //        if (option->state & State_MouseOver) {
-        //            if (option->state & State_Sunken) {
-        //                painter->setPen(Qt::NoPen);
-        //                painter->setBrush(option->palette.color(QPalette::Highlight));
-        //            } else {
-        //                painter->setPen(Qt::NoPen);
-        //                painter->setBrush(option->palette.color(QPalette::Highlight));
-        //            }
-        //        }
-        //        painter->drawRoundedRect(option->rect,4,4);
-        //        painter->restore();
-
-        //        /*!
-        //       * \todo
-        //       * Judge whether it is OK or other buttons
-        //       */
-
-        //        return;
-        //        }
 
     case PE_PanelTipLabel://UKUI Tip  style: Open ground glass
         {
@@ -1118,8 +1139,7 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
 //        }
 
         auto animator = m_button_animation_helper->animator(widget);
-        if(animator == nullptr)
-            return Style::drawPrimitive(PE_PanelButtonTool,option,painter,widget);
+
         bool isWindowButton = false;
         bool isWindowColoseButton = false;
         if (widget && widget->property("isWindowButton").isValid())
@@ -1149,6 +1169,42 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
             painter->drawRoundedRect(option->rect,4,4);
             painter->restore();
         }
+
+        if (animator == nullptr) {
+            painter->save();
+            painter->setRenderHint(QPainter::Antialiasing,true);
+            painter->setPen(Qt::NoPen);
+            if (option->state & (State_Sunken | State_On)) {
+                if (isWindowButton) {
+                    QColor color = option->palette.color(QPalette::Text);
+                    if (useDefaultPalette().contains(qAppName()))
+                        color = option->palette.color(QPalette::Base);
+                    color.setAlphaF(0.15);
+                    painter->setBrush(color);
+                } else if (isWindowColoseButton) {
+                    painter->setBrush(QColor("#E44C50"));
+                } else {
+                    painter->setBrush(option->palette.color(QPalette::Highlight));
+                }
+            } else if (option->state & State_MouseOver) {
+                if (isWindowButton) {
+                    QColor color = option->palette.color(QPalette::Text);
+                    if (useDefaultPalette().contains(qAppName()))
+                        color = option->palette.color(QPalette::Base);
+                    color.setAlphaF(0.1);
+                    painter->setBrush(color);
+                } else if (isWindowColoseButton) {
+                    painter->setBrush(QColor("#F86458"));
+                } else {
+                    auto color = option->palette.color(QPalette::Highlight).lighter(125);
+                    painter->setBrush(color);
+                }
+            }
+            painter->drawRoundedRect(option->rect, 4, 4);
+            painter->restore();
+            return;
+        }
+
         if(option->state & (State_Sunken | State_On) || animator->isRunning("SunKen")
                 || animator->currentAnimatorTime("SunKen") == animator->totalAnimationDuration("SunKen"))
         {
@@ -1665,8 +1721,7 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
 
     case PE_IndicatorRadioButton:
     {
-        if(const QStyleOptionButton* radiobutton = qstyleoption_cast<const QStyleOptionButton*>(option))
-        {
+        if (const QStyleOptionButton* radiobutton = qstyleoption_cast<const QStyleOptionButton*>(option)) {
             QRect rect = radiobutton->rect;
             bool enable = radiobutton->state & State_Enabled;
             bool MouseOver = radiobutton->state & State_MouseOver;
@@ -1688,8 +1743,7 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
             qreal h, s, v;
             color.getHsvF(&h, &s, &v);
 
-            if(radiobutton->state & State_Off)
-            {
+            if(radiobutton->state & State_Off) {
                 painter->save();
                 painter->setRenderHint(QPainter::Antialiasing,true);
 
@@ -1707,30 +1761,27 @@ void Qt5UKUIStyle::drawPrimitive(QStyle::PrimitiveElement element, const QStyleO
                     painter->setPen(box);
                     painter->setBrush(color);
                 }
+                if (!enable)
+                    painter->setBrush(option->palette.color(QPalette::Disabled, QPalette::Base));
                 painter->drawPath(circle);
                 painter->restore();
-            }
-            else if(On)
-            {
-                if(enable)
-                {
-                    painter->save();
-                    painter->setRenderHint(QPainter::Antialiasing,true);
+            } else if (On) {
+                painter->save();
+                painter->setRenderHint(QPainter::Antialiasing,true);
+                painter->setPen(box);
+                painter->setBrush(option->palette.color(QPalette::Highlight).lighter(125));
+                if (SunKen) {
                     painter->setPen(box);
-                    painter->setBrush(option->palette.color(QPalette::Highlight).lighter(125));
-                    if(SunKen)
-                    {
-                        painter->setPen(box);
-                        painter->setBrush(option->palette.color(QPalette::Highlight));
-                    }
-                    else if(MouseOver)
-                    {
-                        painter->setPen(box);
-                        painter->setBrush(option->palette.color(QPalette::Highlight).lighter(150));
-                    }
-                    painter->drawPath(circle);
-                    painter->restore();
+                    painter->setBrush(option->palette.color(QPalette::Highlight));
+                } else if (MouseOver) {
+                    painter->setPen(box);
+                    painter->setBrush(option->palette.color(QPalette::Highlight).lighter(150));
                 }
+                if (!enable)
+                    painter->setBrush(option->palette.color(QPalette::Disabled, QPalette::Base));
+                painter->drawPath(circle);
+                painter->restore();
+
                 circle = QPainterPath();
                 const qreal On_radius = radius / 2.0;
                 circle.addEllipse(circleCenter, On_radius, On_radius);
@@ -3420,50 +3471,83 @@ void Qt5UKUIStyle::drawControl(QStyle::ControlElement element, const QStyleOptio
 
     case CE_HeaderSection:
     {
-        if(const QStyleOptionHeader* header = qstyleoption_cast<const QStyleOptionHeader*>(option))
-        {
-            painter->save();
-            const bool enable = header->state & QStyle::State_Enabled;
-            QPalette::ColorGroup cg = (widget ? widget->isEnabled() : enable)
-                    ? QPalette::Active : QPalette::Disabled;
-            QPixmap cache = QPixmap(header->rect.size());
-//            if(!QPixmapCache::find(key,cache))
-//            {
-            cache.fill(Qt::transparent);
-            QRect pixampRect(0,0,header->rect.width(),header->rect.height());
-            QPainter cachePainter(&cache);
-            const int gridHint = proxy()->styleHint(QStyle::SH_Table_GridLineColor, option, widget);
-            const QColor gridColor = static_cast<QRgb>(gridHint);
-            cachePainter.setPen(Qt::NoPen);
-            cachePainter.setBrush(header->palette.color(enable ? QPalette::Active : QPalette::Disabled,
-                                                        QPalette::Base));
-           if(header->orientation == Qt::Vertical && (header->section & 1))
-            {
-                cachePainter.setBrush(header->palette.brush(cg, QPalette::AlternateBase));
+        if (const QStyleOptionHeader *header = qstyleoption_cast<const QStyleOptionHeader *>(option)){
+
+            bool mouse = header->state &  QStyle::State_MouseOver;
+            bool select = header->state & QStyle::State_Sunken;
+            bool on = header->state & QStyle::State_On;
+            bool roundedRight = false;
+            //角落控件控制
+            const bool isCorner( widget && widget->inherits( "QTableCornerButton" ) );
+            //控件方向判断
+            const bool reverseLayout( option->direction == Qt::LeftToRight );
+            //对控件位置判断
+            if(header->section == QStyleOptionHeader::Middle){
+                roundedRight = true;
+            }else if(header->section == QStyleOptionHeader::Beginning){
+                roundedRight = true;
             }
-            cachePainter.drawRect(pixampRect);
-            cachePainter.setPen(gridColor);
-            cachePainter.setBrush(gridColor);
-            if(widget && (qobject_cast<const QTreeView*>(widget->parentWidget()) ||
-                          qobject_cast<const QTreeWidget*>(widget->parentWidget())))
-            {
-                if(header->position == QStyleOptionHeader::End)
-                {
-                    cachePainter.end();
-                    painter->drawPixmap(header->rect.topLeft(),cache);
+
+            painter->save();
+            painter->setPen(Qt::transparent);
+            //tree头部表格控制
+            const auto view = qobject_cast<const QHeaderView*>(widget);
+            if (view) {
+                auto treeView = qobject_cast<const QTreeView*>(view->parent());
+                if (treeView){
+                    painter->setBrush(header->palette.color(QPalette::Base));
+                    painter->drawRect(header->rect);
+                    if(!isCorner){
+                        if(roundedRight){
+                            painter->setPen(option->palette.color(QPalette::Button).darker(110));
+                            if(reverseLayout){
+                                if(header->orientation == Qt::Horizontal){
+                                    painter->drawLine(header->rect.right(),header->rect.top()+4,header->rect.right(),header->rect.bottom()-4);
+                                }
+                            }else{
+                                if(header->orientation == Qt::Horizontal){
+                                    painter->drawLine(header->rect.left(),header->rect.top()+4,header->rect.left(),header->rect.bottom()-4);
+                                }
+                            }
+                        }
+                    }
                     painter->restore();
                     return;
                 }
-                cachePainter.drawLine(pixampRect.topRight() + QPoint(0,4), pixampRect.bottomRight() - QPoint(0,4));
             }
-            else
-            {
-                cachePainter.drawLine(pixampRect.topRight(),pixampRect.bottomRight());
+
+            painter->setBrush(header->palette.color(QPalette::Button).lighter(105));
+            painter->drawRect(header->rect);
+            if(on){
+                painter->setBrush(header->palette.color(QPalette::Button).darker(105));
             }
-            cachePainter.end();
-//            QPixmapCache::insert(key, cache);
-//            }
-            painter->drawPixmap(header->rect.topLeft(),cache);
+            if(mouse){
+                painter->setBrush(header->palette.color(QPalette::Button));
+            }
+            if(select){
+                painter->setBrush(header->palette.color(QPalette::Button).darker(105));
+            }
+            QPainterPath path_indicator1;
+            path_indicator1.addRoundedRect(option->rect.adjusted(+3,+3,-3,-3),4,4);
+            painter->drawPath(path_indicator1);
+
+
+            //根据不同位置绘制外观
+            if(!isCorner){
+                if(roundedRight){
+                    painter->setPen(option->palette.color(QPalette::Button).darker(110));
+                    if(reverseLayout){
+                        if(header->orientation == Qt::Horizontal){
+                            painter->drawLine(header->rect.right(),header->rect.top()+4,header->rect.right(),header->rect.bottom()-4);
+                        }
+                    }else{
+                        if(header->orientation == Qt::Horizontal){
+                            painter->drawLine(header->rect.left(),header->rect.top()+4,header->rect.left(),header->rect.bottom()-4);
+                        }
+                    }
+                }
+            }
+
             painter->restore();
             return;
         }
@@ -3473,7 +3557,18 @@ void Qt5UKUIStyle::drawControl(QStyle::ControlElement element, const QStyleOptio
     case CE_HeaderEmptyArea:{
         bool enable = option->state & QStyle::State_Enabled;
         painter->fillRect(option->rect,option->palette.color(enable ? QPalette::Active : QPalette::Disabled,
-                                                             QPalette::Base));
+                                                             QPalette::Button).lighter(105));
+        const auto view = qobject_cast<const QHeaderView*>(widget);
+        if (view) {
+            auto treeView = qobject_cast<const QTreeView*>(view->parent());
+            if (treeView){
+                painter->setPen(Qt::NoPen);
+                painter->setBrush(option->palette.color(QPalette::Base));
+                painter->drawRect(option->rect);
+                painter->restore();
+                return;
+            }
+        }
     }
 
     case CE_SizeGrip:
@@ -3889,6 +3984,9 @@ int Qt5UKUIStyle::pixelMetric(QStyle::PixelMetric metric, const QStyleOption *op
         return 0;
     case PM_ToolBarItemSpacing:
         return 4;
+
+    case PM_MessageBoxIconSize:
+        return 24;
     default:
         break;
     }

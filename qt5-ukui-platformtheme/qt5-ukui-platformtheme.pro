@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += widgets dbus gui-private widgets-private
+QT       += widgets dbus gui-private widgets-private x11extras
 
 greaterThan(QT_MAJOR_VERSION, 5)|greaterThan(QT_MINOR_VERSION, 7): \
     QT += theme_support-private
@@ -32,6 +32,8 @@ DEFINES += QT_NO_DEBUG_OUTPUT
 # In order to do so, uncomment the following line.
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
+
+include(widget/widget.pri)
 
 SOURCES += \
         qt5-ukui-platform-theme.cpp \

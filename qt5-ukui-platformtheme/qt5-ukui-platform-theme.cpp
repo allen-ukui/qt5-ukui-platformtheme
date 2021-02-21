@@ -41,6 +41,8 @@
 #include <QDebug>
 #include <private/qgenericunixthemes_p.h>
 
+#include "widget/message-box.h"
+
 
 Qt5UKUIPlatformTheme::Qt5UKUIPlatformTheme(const QStringList &args)
 {
@@ -74,8 +76,6 @@ Qt5UKUIPlatformTheme::Qt5UKUIPlatformTheme(const QStringList &args)
                     icontheme = "ukui";
                 else if (icontheme == "ukui-icon-theme-classical" || icontheme == "ukui-classical")
                     icontheme = "ukui-classical";
-                else
-                    icontheme = "ukui";
 
                 QIcon::setThemeName(icontheme);
                 // update all widgets for repaint new themed icons.
@@ -156,8 +156,8 @@ QVariant Qt5UKUIPlatformTheme::themeHint(ThemeHint hint) const
                     return QStringList()<<"ukui";
                 else if (icontheme == "ukui-icon-theme-classical" || icontheme == "ukui-classical")
                     return QStringList()<<"ukui-classical";
+                return QStringList()<<icontheme;
             }
-            return QStringList()<<"ukui";
         }
         return "hicolor";
     }
@@ -176,13 +176,39 @@ QVariant Qt5UKUIPlatformTheme::themeHint(ThemeHint hint) const
 #if (QT_VERSION >= QT_VERSION_CHECK(5, 9, 0))
 bool Qt5UKUIPlatformTheme::usePlatformNativeDialog(DialogType type) const
 {
-    //FIXME:
+    return true;
+    switch (type) {
+    case QPlatformTheme::FileDialog:
+    case QPlatformTheme::FontDialog:
+    case QPlatformTheme::ColorDialog:
+        return false;
+    case QPlatformTheme::MessageDialog:
+        if (qAppName() == "ukui-control-center" || qAppName() == "kybackup")
+            return false;
+        return true;
+    default:
+        break;
+    }
+
     return false;
 }
 
 QPlatformDialogHelper *Qt5UKUIPlatformTheme::createPlatformDialogHelper(DialogType type) const
 {
-    return QPlatformTheme::createPlatformDialogHelper(type);
+    switch (type) {
+    case QPlatformTheme::FileDialog:
+    case QPlatformTheme::FontDialog:
+    case QPlatformTheme::ColorDialog:
+        return QPlatformTheme::createPlatformDialogHelper(type);
+    case QPlatformTheme::MessageDialog:
+        if (qAppName() == "ukui-control-center" || qAppName() == "kybackup")
+            return nullptr;
+        return new MessageBoxHelper;
+    default:
+        break;
+    }
+
+    return nullptr;
 }
 #endif
 
